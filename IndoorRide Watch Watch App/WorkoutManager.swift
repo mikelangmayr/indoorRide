@@ -82,8 +82,8 @@ final class WorkoutManager: NSObject {
         let start = Date()
         session.startActivity(with: start)
         builder.beginCollection(withStart: start) { [weak self] _, _ in
+            guard let self else { return }
             Task { @MainActor in
-                guard let self else { return }
                 self.startDate = start
                 self.phase = .running
             }
@@ -98,10 +98,8 @@ final class WorkoutManager: NSObject {
         session.end()
         builder.endCollection(withEnd: Date()) { _, _ in
             builder.finishWorkout { [weak self] _, _ in
-                Task { @MainActor in
-                    guard let self else { return }
-                    self.reset()
-                }
+                guard let self else { return }
+                Task { @MainActor in self.reset() }
             }
         }
     }

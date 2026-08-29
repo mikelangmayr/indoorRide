@@ -4,6 +4,10 @@
 <dict>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>NSHealthShareUsageDescription</key>
+	<string>IndoorRide reads workout data to record your ride.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>IndoorRide saves your ride to Apple Health.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>bluetooth-central</string>

@@ -46,6 +46,15 @@ public final class RideConnectivity: NSObject {
         session?.activate()
     }
 
+    #if os(iOS)
+    /// True when a paired Apple Watch has the companion app installed, so the
+    /// watch will own the HealthKit workout and the phone should not also write.
+    public var isWatchAppInstalled: Bool {
+        guard let session, session.activationState == .activated else { return false }
+        return session.isPaired && session.isWatchAppInstalled
+    }
+    #endif
+
     // MARK: Sending (phone side)
 
     /// Stream one live frame. Uses `sendMessage` when reachable for immediacy,

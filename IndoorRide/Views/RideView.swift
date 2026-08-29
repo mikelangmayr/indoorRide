@@ -20,6 +20,7 @@ struct RideView: View {
     @State private var recorder: SessionRecorder
     @State private var connectivity = RideConnectivity()
     @State private var history = RideHistory(store: FileRideHistoryStore.defaultStore())
+    @State private var phoneWriter = PhoneWorkoutWriter()
     @State private var finishedSummary: RideSummary?
     @AppStorage(SettingsKey.powerScaleFactor) private var powerScaleFactor = 1.0
 
@@ -105,6 +106,7 @@ struct RideView: View {
                 if recorder.state == .finished, let summary = recorder.summary {
                     connectivity.sendFinalSummary(summary)
                     finishedSummary = summary
+                    writeHealthIfPhoneOwned(summary)
                 }
             }
             // The bike's radio sleeps when the cranks stop, so no packet arrives
@@ -226,6 +228,17 @@ struct RideView: View {
         // Stopping flips the recorder to `.finished`, and the state observer
         // sends the final summary to the watch and raises the summary sheet.
         recorder.stop()
+    }
+
+    /// Write the workout to HealthKit from the phone only when a watch app is not
+    /// there to own it, and never for demo rides.
+    private func writeHealthIfPhoneOwned(_ summary: RideSummary) {
+        guard !(source is DemoRideSource), !connectivity.isWatchAppInstalled else { return }
+        let samples = recorder.samples
+        Task {
+            await phoneWriter.requestAuthorization()
+            await phoneWriter.write(summary: summary, samples: samples)
+        }
     }
 
     private func postRideSheet(_ summary: RideSummary) -> some View {

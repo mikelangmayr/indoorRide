@@ -42,6 +42,11 @@ struct ContentView: View {
                 break
             }
         }
+        // Write the phone's power and cadence into the workout as they arrive.
+        .onChange(of: connectivity.latestMetrics) { _, metrics in
+            guard let metrics else { return }
+            workout.addLiveSample(power: metrics.power, cadence: metrics.cadence)
+        }
     }
 }
 

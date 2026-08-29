@@ -45,16 +45,52 @@ final class WorkoutManager: NSObject {
 
     private let heartRateType = HKQuantityType(.heartRate)
     private let activeEnergyType = HKQuantityType(.activeEnergyBurned)
+    private let cyclingPowerType = HKQuantityType(.cyclingPower)
+    private let cyclingCadenceType = HKQuantityType(.cyclingCadence)
+
+    private let cadenceUnit = HKUnit.count().unitDivided(by: .minute())
 
     var isHealthDataAvailable: Bool { HKHealthStore.isHealthDataAvailable() }
 
-    /// Ask for the read/share types the session needs. Heart rate is read-only;
-    /// the Watch owns it and the app never writes it back.
+    /// Ask for the read/share types the session needs. Power and cadence come
+    /// from the phone and are written to the workout; heart rate is read-only,
+    /// since the Watch owns it and the app never writes it back.
     func requestAuthorization() async {
         guard isHealthDataAvailable else { return }
-        let share: Set = [HKQuantityType.workoutType(), activeEnergyType]
+        let share: Set = [
+            HKQuantityType.workoutType(),
+            activeEnergyType,
+            cyclingPowerType,
+            cyclingCadenceType
+        ]
         let read: Set<HKObjectType> = [heartRateType, activeEnergyType]
         try? await healthStore.requestAuthorization(toShare: share, read: read)
+    }
+
+    /// Add one power/cadence sample, sourced from the phone's bike stream, to the
+    /// running workout. Heart rate and active energy come from the Watch's own
+    /// sensors via the live data source, so they are not added here.
+    func addLiveSample(power: Int?, cadence: Double?, at date: Date = Date()) {
+        guard phase == .running, let builder else { return }
+        var samples: [HKQuantitySample] = []
+        if let power, power >= 0 {
+            samples.append(HKQuantitySample(
+                type: cyclingPowerType,
+                quantity: HKQuantity(unit: .watt(), doubleValue: Double(power)),
+                start: date,
+                end: date
+            ))
+        }
+        if let cadence, cadence >= 0 {
+            samples.append(HKQuantitySample(
+                type: cyclingCadenceType,
+                quantity: HKQuantity(unit: cadenceUnit, doubleValue: cadence),
+                start: date,
+                end: date
+            ))
+        }
+        guard !samples.isEmpty else { return }
+        builder.add(samples) { _, _ in }
     }
 
     func start() {

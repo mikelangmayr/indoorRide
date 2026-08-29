@@ -1,8 +1,15 @@
 # IndoorRide
 
-Record indoor cycling sessions from a Schwinn IC4 (and compatible FTMS bikes) to
-Apple Health, with a paired iPhone and Apple Watch app. No subscription, no
-avatar, no cloud: just an accurate ride.
+Record indoor cycling sessions from Bluetooth smart bikes and trainers to Apple
+Health, with a paired iPhone and Apple Watch app. No subscription, no avatar, no
+cloud: just an accurate ride.
+
+This is **FTMS / CSC** code, not one-bike code. It works with any bike or trainer
+that speaks the Bluetooth Fitness Machine or Cycling Speed and Cadence profiles:
+the Schwinn IC4, the Bowflex C6 (the identical rebadged bike), the Schwinn IC8,
+most smart trainers, power-meter pedals, and most Bluetooth spin bikes. The IC4
+is the bike it was reverse-engineered and tested against, and the one the story
+below is about.
 
 [![CI](https://github.com/mikelangmayr/indoorRide/actions/workflows/ci.yml/badge.svg)](https://github.com/mikelangmayr/indoorRide/actions/workflows/ci.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)

@@ -51,3 +51,24 @@ struct RideSummaryView: View {
             : String(format: "%d:%02d", minutes, secs)
     }
 }
+
+#if DEBUG
+/// A realistic summary for previews and screenshots.
+func sampleRideSummary(minutes: Int = 25, watts: Int = 182) -> RideSummary {
+    let start = Date(timeIntervalSinceReferenceDate: 0)
+    var accumulator = RideAccumulator(startDate: start)
+    for second in 1...(minutes * 60) {
+        accumulator.integrate(power: watts, cadence: 89, speedKmh: 31,
+                              at: start.addingTimeInterval(TimeInterval(second)))
+    }
+    return RideSummary(from: accumulator)
+}
+#endif
+
+#Preview {
+    NavigationStack {
+        RideSummaryView(summary: sampleRideSummary())
+            .navigationTitle("Ride complete")
+            .navigationBarTitleDisplayMode(.inline)
+    }
+}

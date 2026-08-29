@@ -330,6 +330,9 @@ private struct MetricTile: View {
                     // Monospaced digits stop the numbers jittering at 1 Hz.
                     .font(.system(.title, design: .rounded).monospacedDigit())
                     .fontWeight(.semibold)
+                    // Shrink rather than wrap at large Dynamic Type sizes.
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
                 if let unit {
                     Text(unit)
                         .font(.caption)
@@ -343,6 +346,43 @@ private struct MetricTile: View {
     }
 }
 
-#Preview {
+#if DEBUG
+/// A static bike source for previews and screenshots.
+private final class PreviewBikeSource: BikeDataSource {
+    var state: BikeConnectionState
+    var latest: IndoorBikeData?
+    var lastUpdate: Date?
+
+    init(state: BikeConnectionState = .connected, latest: IndoorBikeData? = nil) {
+        self.state = state
+        self.latest = latest
+        self.lastUpdate = latest == nil ? nil : Date()
+    }
+}
+
+/// A recorder pre-filled with a ride ending about now, so the view's auto-stop
+/// timer does not fire during the preview.
+private func previewRecorder(seconds: Int) -> SessionRecorder {
+    let base = Date().addingTimeInterval(-Double(seconds))
+    let recorder = SessionRecorder()
+    recorder.start(at: base)
+    if let data = IndoorBikeData(indoorBikeDataPacket(
+        speedKmh: 31, cadenceRpm: 88, powerW: 180, heartRate: 148)) {
+        for second in 0...seconds {
+            recorder.record(data, at: base.addingTimeInterval(TimeInterval(second)))
+        }
+    }
+    return recorder
+}
+#endif
+
+#Preview("Recording") {
+    let latest = IndoorBikeData(indoorBikeDataPacket(
+        speedKmh: 32, cadenceRpm: 90, powerW: 186, heartRate: 150))
+    return RideView(source: PreviewBikeSource(latest: latest),
+                    recorder: previewRecorder(seconds: 1500))
+}
+
+#Preview("Idle") {
     RideView()
 }

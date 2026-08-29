@@ -30,6 +30,7 @@ import CoreBluetooth
 import Foundation
 import IndoorRideCore
 import Observation
+import os
 
 // MARK: - UUIDs
 
@@ -91,6 +92,8 @@ public final class BikeConnection: NSObject {
     // MARK: Private
 
     private var central: CBCentralManager!
+
+    private let logger = Logger(subsystem: "com.ahimsacode.IndoorRide", category: "BikeConnection")
 
     /// Strong reference is mandatory. CoreBluetooth does not retain peripherals
     /// for you. Drop this and the connection dies with no error and no
@@ -281,10 +284,14 @@ extension BikeConnection: CBPeripheralDelegate {
         case BLE.modelNumber:
             modelNumber = String(data: data, encoding: .utf8)?
                 .trimmingCharacters(in: .whitespacesAndNewlines)
+            // Logged so a "no cadence on my C6" report can be correlated to a
+            // specific model and firmware.
+            logger.info("Bike model: \(self.modelNumber ?? "unknown", privacy: .public)")
 
         case BLE.firmwareRevision:
             firmwareRevision = String(data: data, encoding: .utf8)?
                 .trimmingCharacters(in: .whitespacesAndNewlines)
+            logger.info("Bike firmware: \(self.firmwareRevision ?? "unknown", privacy: .public)")
 
         default:
             break

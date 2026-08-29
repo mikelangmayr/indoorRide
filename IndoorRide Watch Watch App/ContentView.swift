@@ -114,6 +114,11 @@ private struct MetricsView: View {
     let workout: WorkoutManager
     let connectivity: RideConnectivity
 
+    // In Always On (dimmed) the system updates the screen only about once a
+    // minute. Elapsed time and heart rate read fine at that cadence, but a
+    // minute-old power or cadence number is misleading, so dim those.
+    @Environment(\.isLuminanceReduced) private var isLuminanceReduced
+
     var body: some View {
         let metrics = connectivity.latestMetrics
         ScrollView {
@@ -135,12 +140,14 @@ private struct MetricsView: View {
                 metric(
                     value: metrics?.power.map { "\($0)" } ?? "—",
                     unit: "W",
-                    color: .green
+                    color: .green,
+                    staleWhenDimmed: true
                 )
                 metric(
                     value: metrics?.cadence.map { String(format: "%.0f", $0) } ?? "—",
                     unit: "RPM",
-                    color: .blue
+                    color: .blue,
+                    staleWhenDimmed: true
                 )
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -156,7 +163,12 @@ private struct MetricsView: View {
         }
     }
 
-    private func metric(value: String, unit: String, color: Color) -> some View {
+    private func metric(
+        value: String,
+        unit: String,
+        color: Color,
+        staleWhenDimmed: Bool = false
+    ) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 4) {
             Text(value)
                 .font(.system(.title2, design: .rounded).monospacedDigit())
@@ -165,6 +177,8 @@ private struct MetricsView: View {
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }
+        // Fade values that go stale between the once-a-minute Always On updates.
+        .opacity(staleWhenDimmed && isLuminanceReduced ? 0.35 : 1)
     }
 }
 

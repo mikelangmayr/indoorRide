@@ -15,6 +15,14 @@ below is about.
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 ![Platforms](https://img.shields.io/badge/platforms-iOS%2017%20%7C%20watchOS%2010-lightgrey)
 
+## Screenshots
+
+<p>
+  <img src="docs/screenshots/ride.png" width="30%" alt="Live ride screen with power, cadence, heart rate, calories, and distance" />
+  <img src="docs/screenshots/summary.png" width="30%" alt="Post-ride summary" />
+  <img src="docs/screenshots/history.png" width="30%" alt="Ride history" />
+</p>
+
 ## Why this exists
 
 The Schwinn IC4 does not work with Apple's or Garmin's built-in sensor support,

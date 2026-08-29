@@ -63,3 +63,30 @@ struct RideHistoryView: View {
         date.formatted(date: .abbreviated, time: .shortened)
     }
 }
+
+#if DEBUG
+private final class PreviewHistoryStore: RideHistoryStore {
+    private var rides: [CompletedRide]
+    init(_ rides: [CompletedRide]) { self.rides = rides }
+    func load() -> [CompletedRide] { rides }
+    func save(_ rides: [CompletedRide]) { self.rides = rides }
+}
+
+#Preview {
+    func ride(daysAgo: Int, minutes: Int, watts: Int) -> CompletedRide {
+        let start = Date().addingTimeInterval(-Double(daysAgo) * 86_400)
+        var accumulator = RideAccumulator(startDate: start)
+        for second in 1...(minutes * 60) {
+            accumulator.integrate(power: watts, cadence: Double(watts) / 2, speedKmh: 30,
+                                  at: start.addingTimeInterval(TimeInterval(second)))
+        }
+        return CompletedRide(summary: RideSummary(from: accumulator))
+    }
+    let store = PreviewHistoryStore([
+        ride(daysAgo: 0, minutes: 32, watts: 190),
+        ride(daysAgo: 2, minutes: 45, watts: 165),
+        ride(daysAgo: 5, minutes: 20, watts: 210)
+    ])
+    return NavigationStack { RideHistoryView(history: RideHistory(store: store)) }
+}
+#endif

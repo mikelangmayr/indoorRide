@@ -16,8 +16,21 @@ import IndoorRideCore
 
 /// Foreground ride screen with live metrics and session controls.
 struct RideView: View {
-    @State private var bike = BikeConnection()
-    @State private var recorder = SessionRecorder(store: FileRideStore.defaultStore())
+    @State private var source: any BikeDataSource
+    @State private var recorder: SessionRecorder
+
+    /// Defaults to the live BLE connection with crash-safe persistence. Demo
+    /// mode injects a `DemoRideSource` and a store-less recorder so it never
+    /// clobbers a real in-progress ride.
+    init(
+        source: (any BikeDataSource)? = nil,
+        recorder: SessionRecorder? = nil
+    ) {
+        _source = State(initialValue: source ?? BikeConnection())
+        _recorder = State(
+            initialValue: recorder ?? SessionRecorder(store: FileRideStore.defaultStore())
+        )
+    }
 
     var body: some View {
         NavigationStack {
@@ -38,27 +51,40 @@ struct RideView: View {
                     }
                     .accessibilityLabel("Bluetooth diagnostics")
                 }
+                // Demo mode replays a synthetic ride through the real pipeline,
+                // so the app is exercisable with no bike present.
+                ToolbarItem(placement: .topBarLeading) {
+                    NavigationLink {
+                        RideView(source: DemoRideSource(), recorder: SessionRecorder())
+                            .navigationTitle("Demo")
+                    } label: {
+                        Image(systemName: "play.rectangle.on.rectangle")
+                    }
+                    .accessibilityLabel("Demo mode")
+                }
             }
             // Forward every new notification into the recorder. `record` ignores
             // packets until a ride is started, so this is safe to always wire.
-            .onChange(of: bike.lastUpdate) {
-                guard let latest = bike.latest else { return }
+            .onChange(of: source.lastUpdate) {
+                guard let latest = source.latest else { return }
                 recorder.record(latest)
             }
             // A dropout is a stop signal independent of cadence going to zero.
-            .onChange(of: bike.state) {
-                if bike.state != .connected {
+            .onChange(of: source.state) {
+                if source.state != .connected {
                     recorder.noteDisconnected()
                 }
             }
             // The bike's radio sleeps when the cranks stop, so no packet arrives
             // to trigger auto-pause. A 1 Hz tick catches that silence.
             .task {
+                (source as? DemoRideSource)?.start()
                 while !Task.isCancelled {
                     try? await Task.sleep(for: .seconds(1))
                     recorder.checkTimeout()
                 }
             }
+            .onDisappear { (source as? DemoRideSource)?.stop() }
         }
     }
 
@@ -78,20 +104,20 @@ struct RideView: View {
             )
             MetricTile(
                 title: "Power",
-                value: bike.latest?.instantaneousPower.map { "\($0)" } ?? "—",
+                value: source.latest?.instantaneousPower.map { "\($0)" } ?? "—",
                 unit: "W",
                 systemImage: "bolt.fill"
             )
             MetricTile(
                 title: "Cadence",
-                value: bike.latest?.instantaneousCadence
+                value: source.latest?.instantaneousCadence
                     .map { String(format: "%.0f", $0) } ?? "—",
                 unit: "rpm",
                 systemImage: "arrow.triangle.2.circlepath"
             )
             MetricTile(
                 title: "Heart rate",
-                value: bike.latest?.heartRate
+                value: source.latest?.heartRate
                     .flatMap { $0 == 0 ? nil : "\($0)" } ?? "—",
                 unit: "bpm",
                 systemImage: "heart.fill"
@@ -158,16 +184,16 @@ struct RideView: View {
     }
 
     private var statusText: String {
-        switch bike.state {
+        switch source.state {
         case .unavailable(let reason): reason
         case .searching: "Start pedalling to connect"
         case .connecting: "Connecting…"
-        case .connected: bike.latest == nil ? "Connected, waiting for data" : "Connected"
+        case .connected: source.latest == nil ? "Connected, waiting for data" : "Connected"
         }
     }
 
     private var statusColor: Color {
-        switch bike.state {
+        switch source.state {
         case .unavailable: .red
         case .searching: .orange
         case .connecting: .yellow

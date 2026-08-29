@@ -18,6 +18,7 @@ import IndoorRideCore
 struct RideView: View {
     @State private var source: any BikeDataSource
     @State private var recorder: SessionRecorder
+    @State private var connectivity = RideConnectivity()
 
     /// Defaults to the live BLE connection with crash-safe persistence. Demo
     /// mode injects a `DemoRideSource` and a store-less recorder so it never
@@ -68,12 +69,18 @@ struct RideView: View {
             .onChange(of: source.lastUpdate) {
                 guard let latest = source.latest else { return }
                 recorder.record(latest)
+                connectivity.sendLive(currentMetrics())
             }
             // A dropout is a stop signal independent of cadence going to zero.
             .onChange(of: source.state) {
                 if source.state != .connected {
                     recorder.noteDisconnected()
                 }
+            }
+            // Push every recorder state transition so the watch mirrors
+            // start/pause/resume/stop even between 1 Hz packets.
+            .onChange(of: recorder.state) {
+                connectivity.sendLive(currentMetrics())
             }
             // The bike's radio sleeps when the cranks stop, so no packet arrives
             // to trigger auto-pause. A 1 Hz tick catches that silence.
@@ -151,7 +158,7 @@ struct RideView: View {
             HStack(spacing: 16) {
                 Button("Pause") { recorder.pause() }
                     .buttonStyle(.bordered)
-                Button("End") { recorder.stop() }
+                Button("End") { endRide() }
                     .buttonStyle(.borderedProminent)
                     .tint(.red)
             }
@@ -161,13 +168,32 @@ struct RideView: View {
             HStack(spacing: 16) {
                 Button("Resume") { recorder.resume() }
                     .buttonStyle(.borderedProminent)
-                Button("End") { recorder.stop() }
+                Button("End") { endRide() }
                     .buttonStyle(.bordered)
                     .tint(.red)
             }
             .controlSize(.large)
             .frame(maxWidth: .infinity)
         }
+    }
+
+    private func endRide() {
+        let summary = recorder.stop()
+        if let summary { connectivity.sendFinalSummary(summary) }
+    }
+
+    private func currentMetrics() -> LiveMetrics {
+        let summary = recorder.summary
+        return LiveMetrics(
+            state: recorder.state,
+            elapsed: summary?.activeDuration ?? 0,
+            power: source.latest?.instantaneousPower.map(Int.init),
+            cadence: source.latest?.instantaneousCadence,
+            speed: source.latest?.instantaneousSpeed,
+            heartRate: source.latest?.heartRate.flatMap { $0 == 0 ? nil : Int($0) },
+            energyKilocalories: summary?.energyKilocalories ?? 0,
+            distanceMeters: summary?.distanceMeters ?? 0
+        )
     }
 
     // MARK: - Connection status

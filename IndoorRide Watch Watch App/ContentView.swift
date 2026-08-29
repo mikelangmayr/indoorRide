@@ -12,14 +12,16 @@
 
 import SwiftUI
 import WatchKit
+import IndoorRideCore
 
 struct ContentView: View {
     @State private var workout = WorkoutManager()
+    @State private var connectivity = RideConnectivity()
 
     var body: some View {
         TabView {
             ControlsView(workout: workout)
-            MetricsView(workout: workout)
+            MetricsView(workout: workout, connectivity: connectivity)
             NowPlayingView()
         }
         .tabViewStyle(.page)
@@ -73,8 +75,10 @@ private struct ControlsView: View {
 /// power and cadence are placeholders until the phone sends them.
 private struct MetricsView: View {
     let workout: WorkoutManager
+    let connectivity: RideConnectivity
 
     var body: some View {
+        let metrics = connectivity.latestMetrics
         ScrollView {
             VStack(alignment: .leading, spacing: 8) {
                 elapsedText
@@ -91,8 +95,16 @@ private struct MetricsView: View {
                     unit: "KCAL",
                     color: .orange
                 )
-                metric(value: "—", unit: "W", color: .green)
-                metric(value: "—", unit: "RPM", color: .blue)
+                metric(
+                    value: metrics?.power.map { "\($0)" } ?? "—",
+                    unit: "W",
+                    color: .green
+                )
+                metric(
+                    value: metrics?.cadence.map { String(format: "%.0f", $0) } ?? "—",
+                    unit: "RPM",
+                    color: .blue
+                )
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }

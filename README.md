@@ -83,7 +83,7 @@ Requires Xcode and an iOS Simulator. Open `IndoorRide.xcodeproj` and run the
 xcodebuild test \
   -project IndoorRide.xcodeproj \
   -scheme IndoorRide \
-  -destination 'platform=iOS Simulator,name=iPhone 16' \
+  -destination 'platform=iOS Simulator,name=iPhone 17' \
   CODE_SIGNING_ALLOWED=NO
 ```
 

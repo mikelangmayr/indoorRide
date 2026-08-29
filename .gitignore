@@ -22,5 +22,6 @@ Secrets.xcconfig
 # macOS
 .DS_Store
 
-# Local-only working notes, never committed (see CLAUDE.md)
+# Local-only working notes and agent instructions, never committed
 plans/
+CLAUDE.md

@@ -30,6 +30,6 @@ jobs:
           xcodebuild test \
             -project IndoorRide.xcodeproj \
             -scheme IndoorRide \
-            -destination 'platform=iOS Simulator,name=iPhone 16' \
+            -destination 'platform=iOS Simulator,name=iPhone 17' \
             CODE_SIGNING_ALLOWED=NO \
             | xcbeautify --renderer github-actions

@@ -39,12 +39,25 @@ public final class SessionRecorder {
     /// No new packets for this long while recording means the bike dropped off
     /// the air (its radio sleeps when the cranks stop), so auto-pause.
     private let autoPauseTimeout: TimeInterval
+    /// Idle this long and the ride is over, not merely paused: the rider got off
+    /// the bike. Auto-finalize so the session doesn't linger open forever.
+    private let autoStopTimeout: TimeInterval
     private let maxSampleGap: TimeInterval
+
+    /// Multiplier applied to the bike's reported watts before recording. The
+    /// IC4 reads ~20-25% high versus a real power meter, so a per-user scale
+    /// (v1 default 1.0) corrects it. Cadence and speed are measured, not scaled.
+    public var powerScale: Double = 1.0
 
     // MARK: Private
 
     private let store: RideStore?
     private var accumulator: RideAccumulator?
+
+    /// Timestamp of the last real activity, kept across auto-pauses (unlike the
+    /// accumulator's `lastMovingDate`, which resets) so the auto-stop timer
+    /// measures total idle time, not time since the last pause.
+    private var lastActivity: Date?
 
     /// True only when the rider pressed pause. An auto-pause (cranks stopped or
     /// bike dropped) leaves this false, so movement can auto-resume; a manual
@@ -61,10 +74,12 @@ public final class SessionRecorder {
     public init(
         store: RideStore? = nil,
         autoPauseTimeout: TimeInterval = 4,
+        autoStopTimeout: TimeInterval = 300,
         maxSampleGap: TimeInterval = RideAccumulator.defaultMaxSampleGap
     ) {
         self.store = store
         self.autoPauseTimeout = autoPauseTimeout
+        self.autoStopTimeout = autoStopTimeout
         self.maxSampleGap = maxSampleGap
         restoreInProgressRide()
     }
@@ -86,6 +101,7 @@ public final class SessionRecorder {
         accumulator = RideAccumulator(startDate: date)
         samples = []
         userPaused = false
+        lastActivity = date
         lastSampleSecond = nil
         lastPersistSecond = nil
         state = .recording
@@ -129,14 +145,23 @@ public final class SessionRecorder {
         )
     }
 
-    /// Auto-pause when the bike has gone quiet for longer than the timeout.
-    /// Call periodically (a 1 Hz timer) so a mid-ride dropout is caught even
-    /// though, by definition, no further packets arrive to trigger it.
+    /// Auto-pause, then eventually auto-stop, when the bike goes quiet. Call
+    /// periodically (a 1 Hz timer) so a mid-ride dropout is caught even though,
+    /// by definition, no further packets arrive to trigger it. A manual pause is
+    /// left alone: the rider chose it and may resume much later.
     public func checkTimeout(now: Date = .now) {
-        guard state == .recording, let last = accumulator?.lastMovingDate else { return }
-        guard now.timeIntervalSince(last) > autoPauseTimeout else { return }
-        enterPaused()
-        persist()
+        guard state == .recording || (state == .paused && !userPaused) else { return }
+        guard let last = lastActivity else { return }
+        let idle = now.timeIntervalSince(last)
+
+        if idle > autoStopTimeout {
+            stop(at: now)
+            return
+        }
+        if state == .recording, idle > autoPauseTimeout {
+            enterPaused()
+            persist()
+        }
     }
 
     /// The BLE connection dropped. Treat as an immediate auto-pause.
@@ -170,15 +195,17 @@ public final class SessionRecorder {
             return
         }
 
+        lastActivity = date
+        let scaledPower = power.map { Int((Double($0) * powerScale).rounded()) }
         accumulator?.integrate(
-            power: power ?? 0,
+            power: scaledPower ?? 0,
             cadence: cadence ?? 0,
             speedKmh: speedKmh ?? 0,
             at: date,
             maxGap: maxSampleGap
         )
         appendSampleIfDue(
-            power: power,
+            power: scaledPower,
             cadence: cadence,
             speedKmh: speedKmh,
             heartRate: heartRate,

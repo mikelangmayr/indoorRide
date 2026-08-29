@@ -20,12 +20,28 @@ struct ContentView: View {
 
     var body: some View {
         TabView {
-            ControlsView(workout: workout)
+            ControlsView(workout: workout, connectivity: connectivity)
             MetricsView(workout: workout, connectivity: connectivity)
             NowPlayingView()
         }
         .tabViewStyle(.page)
         .task { await workout.requestAuthorization() }
+        // Mirror the phone's recording state onto the local workout session, so
+        // auto-start on the bike and phone-side controls both drive the watch.
+        .onChange(of: connectivity.latestMetrics?.state) { _, newState in
+            guard let newState else { return }
+            switch newState {
+            case .recording:
+                if workout.phase == .idle { workout.start() }
+                else if workout.phase == .paused { workout.resume() }
+            case .paused:
+                if workout.phase == .running { workout.pause() }
+            case .finished:
+                workout.end()
+            case .idle:
+                break
+            }
+        }
     }
 }
 
@@ -35,30 +51,46 @@ struct ContentView: View {
 /// rather than four small ones.
 private struct ControlsView: View {
     let workout: WorkoutManager
+    let connectivity: RideConnectivity
 
     var body: some View {
         VStack(spacing: 12) {
             switch workout.phase {
             case .idle, .ended:
-                Button(action: workout.start) {
+                Button {
+                    workout.start()
+                    connectivity.sendCommand(.start)
+                } label: {
                     Label("Start", systemImage: "play.fill")
                 }
                 .tint(.green)
             case .running:
-                Button(action: workout.pause) {
+                Button {
+                    workout.pause()
+                    connectivity.sendCommand(.pause)
+                } label: {
                     Label("Pause", systemImage: "pause.fill")
                 }
                 .tint(.yellow)
-                Button(action: workout.end) {
+                Button {
+                    workout.end()
+                    connectivity.sendCommand(.stop)
+                } label: {
                     Label("End", systemImage: "stop.fill")
                 }
                 .tint(.red)
             case .paused:
-                Button(action: workout.resume) {
+                Button {
+                    workout.resume()
+                    connectivity.sendCommand(.resume)
+                } label: {
                     Label("Resume", systemImage: "play.fill")
                 }
                 .tint(.green)
-                Button(action: workout.end) {
+                Button {
+                    workout.end()
+                    connectivity.sendCommand(.stop)
+                } label: {
                     Label("End", systemImage: "stop.fill")
                 }
                 .tint(.red)

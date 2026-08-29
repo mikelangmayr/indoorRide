@@ -33,6 +33,10 @@ public final class RideConnectivity: NSObject {
     /// Whether the peer is currently reachable for immediate messages.
     public private(set) var isReachable = false
 
+    /// Invoked when a control command arrives from the peer. The phone sets this
+    /// to drive its recorder; the watch may set it to drive its workout.
+    public var onCommand: (@MainActor (RideCommand) -> Void)?
+
     private let session: WCSession?
 
     public override init() {
@@ -63,12 +67,35 @@ public final class RideConnectivity: NSObject {
         session.transferUserInfo(["summary": data])
     }
 
-    // MARK: Receiving helpers
+    /// Send a control command. Uses an immediate message when reachable, and
+    /// falls back to a queued transfer so a start or stop is never dropped.
+    public func sendCommand(_ command: RideCommand) {
+        guard let session, session.activationState == .activated else { return }
+        let payload = ["command": command.rawValue]
+        if session.isReachable {
+            session.sendMessage(payload, replyHandler: nil, errorHandler: nil)
+        } else {
+            session.transferUserInfo(payload)
+        }
+    }
 
-    private func ingestLive(_ payload: [String: Any]) {
-        guard let data = payload["live"] as? Data,
-              let metrics = try? JSONDecoder().decode(LiveMetrics.self, from: data) else { return }
-        Task { @MainActor in self.latestMetrics = metrics }
+    // MARK: Receiving
+
+    /// Dispatch any of the payload kinds we understand: a live frame, a control
+    /// command, or a final summary. One payload may carry more than one.
+    private func handleIncoming(_ payload: [String: Any]) {
+        if let data = payload["live"] as? Data,
+           let metrics = try? JSONDecoder().decode(LiveMetrics.self, from: data) {
+            latestMetrics = metrics
+        }
+        if let raw = payload["command"] as? String,
+           let command = RideCommand(rawValue: raw) {
+            onCommand?(command)
+        }
+        if let data = payload["summary"] as? Data,
+           let summary = try? JSONDecoder().decode(RideSummary.self, from: data) {
+            finalSummary = summary
+        }
     }
 }
 
@@ -94,23 +121,21 @@ extension RideConnectivity: WCSessionDelegate {
         _ session: WCSession,
         didReceiveMessage message: [String: Any]
     ) {
-        Task { @MainActor in self.ingestLive(message) }
+        Task { @MainActor in self.handleIncoming(message) }
     }
 
     nonisolated public func session(
         _ session: WCSession,
         didReceiveApplicationContext applicationContext: [String: Any]
     ) {
-        Task { @MainActor in self.ingestLive(applicationContext) }
+        Task { @MainActor in self.handleIncoming(applicationContext) }
     }
 
     nonisolated public func session(
         _ session: WCSession,
         didReceiveUserInfo userInfo: [String: Any]
     ) {
-        guard let data = userInfo["summary"] as? Data,
-              let summary = try? JSONDecoder().decode(RideSummary.self, from: data) else { return }
-        Task { @MainActor in self.finalSummary = summary }
+        Task { @MainActor in self.handleIncoming(userInfo) }
     }
 
     // Required on iOS only; the phone can be paired with a new watch mid-life.

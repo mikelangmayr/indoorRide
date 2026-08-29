@@ -19,6 +19,9 @@ struct RideView: View {
     @State private var source: any BikeDataSource
     @State private var recorder: SessionRecorder
     @State private var connectivity = RideConnectivity()
+    @State private var history = RideHistory(store: FileRideHistoryStore.defaultStore())
+    @State private var finishedSummary: RideSummary?
+    @AppStorage(SettingsKey.powerScaleFactor) private var powerScaleFactor = 1.0
 
     /// Defaults to the live BLE connection with crash-safe persistence. Demo
     /// mode injects a `DemoRideSource` and a store-less recorder so it never
@@ -44,24 +47,37 @@ struct RideView: View {
             .padding()
             .navigationTitle("IndoorRide")
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    NavigationLink {
-                        BikeMonitorView()
-                    } label: {
-                        Image(systemName: "waveform.and.magnifyingglass")
-                    }
-                    .accessibilityLabel("Bluetooth diagnostics")
-                }
-                // Demo mode replays a synthetic ride through the real pipeline,
-                // so the app is exercisable with no bike present.
                 ToolbarItem(placement: .topBarLeading) {
                     NavigationLink {
-                        RideView(source: DemoRideSource(), recorder: SessionRecorder())
-                            .navigationTitle("Demo")
+                        RideHistoryView(history: history)
                     } label: {
-                        Image(systemName: "play.rectangle.on.rectangle")
+                        Image(systemName: "list.bullet")
                     }
-                    .accessibilityLabel("Demo mode")
+                    .accessibilityLabel("History")
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        NavigationLink {
+                            SettingsView()
+                        } label: {
+                            Label("Settings", systemImage: "gearshape")
+                        }
+                        // Demo mode replays a synthetic ride through the real
+                        // pipeline, so the app is exercisable with no bike.
+                        NavigationLink {
+                            RideView(source: DemoRideSource(), recorder: SessionRecorder())
+                                .navigationTitle("Demo")
+                        } label: {
+                            Label("Demo mode", systemImage: "play.rectangle.on.rectangle")
+                        }
+                        NavigationLink {
+                            BikeMonitorView()
+                        } label: {
+                            Label("Bluetooth diagnostics", systemImage: "waveform.and.magnifyingglass")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                    }
                 }
             }
             // Forward every new notification into the recorder. `record` ignores
@@ -71,27 +87,56 @@ struct RideView: View {
                 recorder.record(latest)
                 connectivity.sendLive(currentMetrics())
             }
-            // A dropout is a stop signal independent of cadence going to zero.
+            // The bike appearing on the air means the rider started pedalling,
+            // so auto-start recording; its dropping off is an independent stop
+            // signal alongside cadence going to zero.
             .onChange(of: source.state) {
-                if source.state != .connected {
+                if source.state == .connected, recorder.state == .idle {
+                    recorder.start()
+                } else if source.state != .connected {
                     recorder.noteDisconnected()
                 }
             }
             // Push every recorder state transition so the watch mirrors
-            // start/pause/resume/stop even between 1 Hz packets.
+            // start/pause/resume/stop even between 1 Hz packets, and hand over
+            // the final summary once the ride ends (button or auto-stop).
             .onChange(of: recorder.state) {
                 connectivity.sendLive(currentMetrics())
+                if recorder.state == .finished, let summary = recorder.summary {
+                    connectivity.sendFinalSummary(summary)
+                    finishedSummary = summary
+                }
             }
             // The bike's radio sleeps when the cranks stop, so no packet arrives
             // to trigger auto-pause. A 1 Hz tick catches that silence.
             .task {
+                recorder.powerScale = powerScaleFactor
+                // The watch owns the start button; drive the recorder from the
+                // commands it sends.
+                connectivity.onCommand = { command in
+                    switch command {
+                    case .start: recorder.start()
+                    case .pause: recorder.pause()
+                    case .resume: recorder.resume()
+                    case .stop: recorder.stop()
+                    }
+                }
                 (source as? DemoRideSource)?.start()
                 while !Task.isCancelled {
                     try? await Task.sleep(for: .seconds(1))
                     recorder.checkTimeout()
                 }
             }
+            .onChange(of: powerScaleFactor) { recorder.powerScale = powerScaleFactor }
             .onDisappear { (source as? DemoRideSource)?.stop() }
+            .sheet(isPresented: Binding(
+                get: { finishedSummary != nil },
+                set: { if !$0 { finishedSummary = nil } }
+            )) {
+                if let finishedSummary {
+                    postRideSheet(finishedSummary)
+                }
+            }
         }
     }
 
@@ -178,8 +223,28 @@ struct RideView: View {
     }
 
     private func endRide() {
-        let summary = recorder.stop()
-        if let summary { connectivity.sendFinalSummary(summary) }
+        // Stopping flips the recorder to `.finished`, and the state observer
+        // sends the final summary to the watch and raises the summary sheet.
+        recorder.stop()
+    }
+
+    private func postRideSheet(_ summary: RideSummary) -> some View {
+        NavigationStack {
+            RideSummaryView(summary: summary)
+                .navigationTitle("Ride complete")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Discard", role: .destructive) { finishedSummary = nil }
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Save") {
+                            history.add(summary)
+                            finishedSummary = nil
+                        }
+                    }
+                }
+        }
     }
 
     private func currentMetrics() -> LiveMetrics {

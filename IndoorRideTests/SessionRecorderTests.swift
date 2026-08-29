@@ -88,6 +88,19 @@ struct SessionRecorderTests {
         #expect(summary.averagePower == 200)
     }
 
+    @Test func powerScaleMultipliesRecordedPower() throws {
+        let recorder = SessionRecorder()
+        recorder.powerScale = 2.0
+        recorder.start(at: at(0))
+        for second in 0...2 {
+            recorder.record(ride(speedKmh: 30, cadenceRpm: 60, powerW: 100),
+                            at: at(TimeInterval(second)))
+        }
+        let summary = try #require(recorder.summary)
+        #expect(summary.averagePower == 200)
+        #expect(summary.maxPower == 200)
+    }
+
     @Test func autoPausesWhenCranksStopAndResumesOnMovement() {
         let recorder = SessionRecorder()
         recorder.start(at: at(0))
@@ -151,6 +164,25 @@ struct SessionRecorderTests {
         recorder.start(at: at(0))
         recorder.record(ride(speedKmh: 30, cadenceRpm: 60, powerW: 100), at: at(0))
         recorder.noteDisconnected(at: at(1))
+        #expect(recorder.state == .paused)
+    }
+
+    @Test func autoStopsAfterProlongedInactivity() {
+        let recorder = SessionRecorder(autoPauseTimeout: 4, autoStopTimeout: 30)
+        recorder.start(at: at(0))
+        recorder.record(ride(speedKmh: 30, cadenceRpm: 60, powerW: 100), at: at(0))
+        recorder.checkTimeout(now: at(10)) // past pause, before stop
+        #expect(recorder.state == .paused)
+        recorder.checkTimeout(now: at(31)) // past stop
+        #expect(recorder.state == .finished)
+    }
+
+    @Test func autoStopLeavesManualPauseAlone() {
+        let recorder = SessionRecorder(autoPauseTimeout: 4, autoStopTimeout: 30)
+        recorder.start(at: at(0))
+        recorder.record(ride(speedKmh: 30, cadenceRpm: 60, powerW: 100), at: at(0))
+        recorder.pause(at: at(1))
+        recorder.checkTimeout(now: at(100)) // the rider chose to pause; do not end
         #expect(recorder.state == .paused)
     }
 

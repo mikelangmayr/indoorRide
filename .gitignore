@@ -1,0 +1,26 @@
+# Xcode
+build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# Secrets — never commit these. Anything pushed to a public repo lives in
+# git history forever, even after you delete it.
+Secrets.xcconfig
+*.p12
+*.mobileprovision
+
+# macOS
+.DS_Store
+
+# Local-only working notes, never committed (see CLAUDE.md)
+plans/

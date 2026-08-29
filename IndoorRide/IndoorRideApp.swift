@@ -11,7 +11,7 @@ import SwiftUI
 struct IndoorRideApp: App {
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            RideView()
         }
     }
 }

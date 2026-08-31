@@ -63,7 +63,6 @@ func sampleRideSummary(minutes: Int = 25, watts: Int = 182) -> RideSummary {
     }
     return RideSummary(from: accumulator)
 }
-#endif
 
 #Preview {
     NavigationStack {
@@ -72,3 +71,4 @@ func sampleRideSummary(minutes: Int = 25, watts: Int = 182) -> RideSummary {
             .navigationBarTitleDisplayMode(.inline)
     }
 }
+#endif

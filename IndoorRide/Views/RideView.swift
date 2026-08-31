@@ -374,7 +374,6 @@ private func previewRecorder(seconds: Int) -> SessionRecorder {
     }
     return recorder
 }
-#endif
 
 #Preview("Recording") {
     let latest = IndoorBikeData(indoorBikeDataPacket(
@@ -386,3 +385,4 @@ private func previewRecorder(seconds: Int) -> SessionRecorder {
 #Preview("Idle") {
     RideView()
 }
+#endif
